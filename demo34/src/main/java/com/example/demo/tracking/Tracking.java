@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.example.demo.distribution.Ride;
+import com.example.demo.journal.Journal;
 import com.example.demo.mapper.JournalMapper;
 import com.example.demo.mapper.RideMapper;
 import com.example.demo.mapper.TrailMapper;
@@ -54,6 +55,7 @@ public class Tracking {
             @Override
             public void messageArrived(String s, MqttMessage mqttMessage) throws Exception {
                 JSONObject jsonObject=JSON.parseObject(mqttMessage.toString());
+                System.out.print(jsonObject);
                 JSONObject result=new JSONObject();
                 Integer state=(Integer)jsonObject.get("state");
                 String rid=jsonObject.get("rid").toString();
@@ -63,6 +65,7 @@ public class Tracking {
                                   .set("pick_time",new Timestamp(System.currentTimeMillis()))
                                   .set("state","行程中");
                     rideMapper.update(null,updateWrapper1);
+
                 }
                 else if(state==3){
                     updateWrapper1.eq("rid",rid)
@@ -70,22 +73,24 @@ public class Tracking {
                                   .set("state","行程结束");
                     rideMapper.update(null,updateWrapper1);
                 }
-                Double lat=(Double)jsonObject.get("lat");
-                Double lng=(Double)jsonObject.get("lng");
-                Double speed=(Double)jsonObject.get("speed");
-                Double alt=(Double)jsonObject.get("alt");
+                String lat=jsonObject.get("lat").toString();
+                String lng=jsonObject.get("lng").toString();
+                String speed=jsonObject.get("speed").toString();
+                String alt=jsonObject.get("alt").toString();
                 Timestamp time=new Timestamp(System.currentTimeMillis());
                 result.put("lat",lat);
                 result.put("lng",lng);
                 Trail trail=trailMapper.selectOne(new QueryWrapper<Trail>().eq("rid",rid));
                 UpdateWrapper<Trail> updateWrapper=new UpdateWrapper<>();
                 updateWrapper.eq("rid",rid)
-                             .set("heighttrail",trail.getHeighttrail()+","+alt.toString())
+                             .set("heighttrail",trail.getHeighttrail()+","+alt)
                              .set("gpstrail",trail.getGpstrail()+","+result.toJSONString())
-                             .set("speedtrail",trail.getSpeedtrail()+","+speed.toString())
-                             .set("serialtime",trail.getSerialtime()+","+time.toString());
+                             .set("speedtrail",trail.getSpeedtrail()+","+speed)
+                             .set("serialtime",trail.getSerialtime()+","+time);
                 trailMapper.update(null,updateWrapper);
-
+                journalMapper.insert(new Journal(new Timestamp(System.currentTimeMillis()),"Track",
+                        "INFO","The trail information of "+rid+ "has been paid updated"));
+                return;
             }
 
             @Override
@@ -98,6 +103,7 @@ public class Tracking {
     public void startTracking(String channel,String rid){
         mqtt=new Mqtts(getTrackCallback());
         this.rid=rid;
+        trailMapper.insert(new Trail("",rid,"","","",""));
         mqtt.subscribe(channel,1);
     }
 
